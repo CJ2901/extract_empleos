@@ -1,0 +1,47 @@
+name: Scrape & Update Data
+
+on:
+  # SE EJECUTA TODOS LOS DÍAS A LAS 08:34 HORA DE LIMA (UTC-5)
+  # => 13:34 UTC
+  schedule:
+    # - cron: '34 13 * * *'
+    - cron: '7 1 * * *'
+  # PERMITE EJECUCIÓN MANUAL DESDE LA PESTAÑA "ACTIONS" EN GITHUB
+  workflow_dispatch:
+
+jobs:
+  run-scrapers:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Setup Python (Scraper 1)
+        uses: actions/setup-python@v3
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies for Scraper 1
+        run: pip install -r scrapers/scraper_1/requirements.txt
+
+      - name: Run Scraper 1
+        run: python scrapers/scraper_1/main.py
+
+      - name: Setup Python (Scraper 2)
+        uses: actions/setup-python@v3
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies for Scraper 2
+        run: pip install -r scrapers/scraper_2/requirements.txt
+
+      - name: Run Scraper 2
+        run: python scrapers/scraper_2/main.py
+
+      - name: Commit and push changes
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add .
+          git commit -m "Scrapeo del dia: $(date)"
+          git push
