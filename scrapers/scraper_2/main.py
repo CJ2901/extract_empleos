@@ -4,6 +4,7 @@ from utils import first_session, left_to_rigth, right_to_left
 from time import time
 import pandas as pd
 import pytz, datetime, uuid
+import os
 
 GMT5 = pytz.timezone("Etc/GMT+5")
 today = datetime.datetime.now(GMT5).strftime("%d-%m-%Y")
@@ -47,6 +48,7 @@ if __name__ == "__main__":
     data = pd.concat(data_list, ignore_index=True)
     data["id_uuid"] = [uuid.uuid4() for _ in range(len(data))]
     data["fechaActualizacion"] = datetime.datetime.now()
+    os.makedirs(os.path.dirname(DATA_PATH), exist_ok=True)
     data.to_csv(DATA_PATH, index=False)
     print(f"DATOS GUARDADOS EN '{DATA_PATH}' ({len(data)} REGISTROS).")
 

@@ -7,6 +7,7 @@ from datetime import datetime
 from tqdm import tqdm
 from utils import get_total_and_first_page, fetch_page
 from config import CAMPOS
+import os
 
 if __name__ == "__main__":
     # INICIO DEL PROCESO
@@ -38,6 +39,7 @@ if __name__ == "__main__":
         df["id_uuid"] = [uuid.uuid4() for _ in range(len(df))]
         df["fechaActualizacion"] = datetime.now()
         # GUARDAR CSV CON FECHA ACTUAL EN EL NOMBRE
+        os.makedirs(os.path.dirname(DATA_PATH), exist_ok=True)
         df.to_csv(DATA_PATH, index=False)
         print(f"DATOS GUARDADOS EN '{DATA_PATH}' ({len(df)} REGISTROS).")
     
