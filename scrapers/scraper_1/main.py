@@ -59,5 +59,6 @@ if __name__ == "__main__":
     }
     day_data = pd.concat([last_log, pd.DataFrame(data_log)], ignore_index=True)
     day_data["id_uuid"] = [uuid.uuid4() for _ in range(len(day_data))]
+    os.makedirs(os.path.dirname(PATH_LOG), exist_ok=True)
     day_data.to_csv(PATH_LOG, index=False)
     print(f"TIEMPO DE EJECUCIÓN: {end:.2f} SEGUNDOS")
