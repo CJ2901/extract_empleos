@@ -15,8 +15,8 @@ if __name__ == "__main__":
     today = datetime.now().strftime("%d-%m-%Y")
     
     # DEFINICIÓN DE RUTAS
-    PATH_LOG = "./logs/logs.csv"
-    DATA_PATH = f"../../data/scraper_1/{today}.csv"    
+    PATH_LOG = f"scrapers/scraper_1/logs/logs.csv"
+    DATA_PATH = f"data/scraper_1/{today}.csv"
 
     total_records, total_pages, first_page_content = get_total_and_first_page()
 

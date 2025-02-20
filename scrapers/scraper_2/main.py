@@ -12,8 +12,8 @@ today = datetime.datetime.now(GMT5).strftime("%d-%m-%Y")
 DEPS = [str(n).zfill(2) for n in range(1, 26) if n != 15]
 LIMA = "15"
 
-PATH_LOG = "./logs/logs.csv"
-DATA_PATH = f"../../data/scraper_2/{today}.csv"
+PATH_LOG = f"scrapers/scraper_2/logs/logs.csv"
+DATA_PATH = f"data/scraper_2/{today}.csv"
 
 def ejecutar(dep):
     # SCRAPING POR DEPARTAMENTO
