@@ -54,16 +54,27 @@ def goto_prev_page_payload(view_state_value, dep_search):
 
 # --- FUNCIONES DE SCRAPING ---
 def get_view_state(soup):
-    # OBTENER VIEWSTATE
-    return soup.find("input", {"name": "javax.faces.ViewState"})["value"]
+    # OBTENER VIEWSTATE CON COMPROBACIÓN
+    element = soup.find("input", {"name": "javax.faces.ViewState"})
+    if element and element.has_attr("value"):
+        return element["value"]
+    else:
+        raise ValueError("No se encontró el 'javax.faces.ViewState' en la respuesta HTML.")
 
-def first_session(url=URL, head=HEADERS):
+
+def first_session(url=URL, head=HEADERS, retries=3):
     # INICIAR SESIÓN Y OBTENER VIEWSTATE
     session = requests.Session()
-    req = session.get(url, headers=head)
-    soup = bsoup(req.content, features="lxml")
-    view_state = get_view_state(soup)
-    return session, soup, view_state
+    for attempt in range(retries):
+        req = session.get(url, headers=head)
+        soup = bsoup(req.content, features="lxml")
+        try:
+            view_state = get_view_state(soup)
+            return session, soup, view_state
+        except ValueError as e:
+            print(f"Intento {attempt + 1} de {retries} fallido: {e}")
+    raise Exception("No se pudo obtener el ViewState después de varios intentos.")
+
 
 def goto_page(data, session):
     # PETICIÓN POST CON PAYLOAD
