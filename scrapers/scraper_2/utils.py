@@ -3,8 +3,12 @@ import re
 import requests
 import pandas as pd
 from bs4 import BeautifulSoup as bsoup
+import warnings
+from bs4 import XMLParsedAsHTMLWarning
 from tqdm import tqdm
 from config import URL, HEADERS, share_payload, first_page, next_page, last_page, prev_page
+
+warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
 # --- FUNC. AUXILIARES ---
 def limpiar_espacios(texto):
@@ -54,12 +58,14 @@ def goto_prev_page_payload(view_state_value, dep_search):
 
 # --- FUNCIONES DE SCRAPING ---
 def get_view_state(soup):
-    # OBTENER VIEWSTATE CON COMPROBACIÓN
-    element = soup.find("input", {"name": "javax.faces.ViewState"})
-    if element and element.has_attr("value"):
-        return element["value"]
-    else:
-        raise ValueError("No se encontró el 'javax.faces.ViewState' en la respuesta HTML.")
+    view_state_input = soup.find("input", {"name": "javax.faces.ViewState"})
+    if view_state_input is None:
+        print("DEBUG: No se encontró el input con name 'javax.faces.ViewState'.")
+        # Puedes imprimir parte del HTML para ver qué se está recibiendo (ten cuidado con el tamaño)
+        print("DEBUG: Inicio del contenido recibido:", soup.prettify()[:1000])
+        raise ValueError("No se encontró 'javax.faces.ViewState' en la respuesta HTML.")
+    return view_state_input.get("value")
+
 
 
 def first_session(url=URL, head=HEADERS, retries=3):
