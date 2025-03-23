@@ -6,18 +6,20 @@ on:
   schedule:
     # - cron: '34 13 * * *'
     - cron: '7 1 * * *'
-  # PERMITE EJECUCIÓN MANUAL DESDE LA PESTAÑA "ACTIONS" EN GITHUB
   workflow_dispatch:
 
 jobs:
   run-scrapers:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           persist-credentials: false
+
+      - name: Add config folder to PATH
+        run: echo "${{ github.workspace }}\config" >> $GITHUB_PATH
 
       - name: Setup Python (Scraper 1)
         uses: actions/setup-python@v3
@@ -30,6 +32,20 @@ jobs:
       - name: Run Scraper 1
         run: python scrapers/scraper_1/main.py
 
+      - name: Commit changes for Scraper 1
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add .
+          git commit -m "Scrapeo del dia (Scraper 1): $(date)" || echo "No changes to commit"
+
+      - name: Push changes after Scraper 1
+        uses: ad-m/github-push-action@v0.6.0
+        with:
+          github_token: ${{ secrets.PERSONAL_TOKEN }}
+          branch: main
+
+
       - name: Setup Python (Scraper 2)
         uses: actions/setup-python@v3
         with:
@@ -41,14 +57,14 @@ jobs:
       - name: Run Scraper 2
         run: python scrapers/scraper_2/main.py
 
-      - name: Commit and push changes
+      - name: Commit changes for Scraper 2
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           git add .
-          git commit -m "Scrapeo del dia: $(date)" || echo "No changes to commit"
+          git commit -m "Scrapeo del dia (Scraper 2): $(date)" || echo "No changes to commit"
 
-      - name: Push changes
+      - name: Push changes after Scraper 2
         uses: ad-m/github-push-action@v0.6.0
         with:
           github_token: ${{ secrets.PERSONAL_TOKEN }}
