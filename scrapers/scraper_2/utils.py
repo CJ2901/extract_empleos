@@ -76,21 +76,24 @@ def get_view_state(soup):
 
 def first_session(url=URL, head=HEADERS, retries=3):
     options = Options()
-    options.add_argument("--headless")  # Ejecuta en modo headless
+    # options.add_argument("--headless")  # Ejecuta en modo headless
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
     options.add_argument(f'--user-agent={head.get("User-Agent", "")}')
+    options.add_argument("--disable-blink-features=AutomationControlled")
     
     driver = webdriver.Chrome(options=options)
     
     try:
         driver.get(url)
-        wait = WebDriverWait(driver, 10)
+        wait = WebDriverWait(driver, 30)
         element = wait.until(EC.presence_of_element_located((By.NAME, "javax.faces.ViewState")))
         view_state = element.get_attribute("value")
     except Exception as e:
+        # Imprime un fragmento del HTML para ayudar a depurar
+        page_source_snippet = driver.page_source[:1000]
         driver.quit()
-        raise Exception(f"Error al obtener el ViewState con Selenium: {e}")
+        raise Exception(f"Error al obtener el ViewState con Selenium: {e}. Page source snippet: {page_source_snippet}")
     
     # Transferir cookies de Selenium a una sesión de requests
     session = requests.Session()
