@@ -76,7 +76,7 @@ def get_view_state(soup):
 
 def first_session(url=URL, head=HEADERS, retries=3):
     options = Options()
-    # options.add_argument("--headless")  # Ejecuta en modo headless
+    options.add_argument("--headless")  # Ejecuta en modo headless
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
     options.add_argument(f'--user-agent={head.get("User-Agent", "")}')
