@@ -15,23 +15,62 @@ DEPS = [str(n).zfill(2) for n in range(1, 26) if n != 15]
 LIMA = "15"
 
 
-def run_department(dep: str) -> pd.DataFrame:
-    session, _, view_state = first_session()
-    return left_to_rigth(view_state, dep, session)
+def run_department(
+    dep: str,
+    request_timeout: int,
+    viewstate_retries: int,
+    use_selenium_fallback: bool,
+    selenium_wait_timeout: int,
+) -> pd.DataFrame:
+    session, _, view_state = first_session(
+        retries=viewstate_retries,
+        request_timeout=request_timeout,
+        use_selenium_fallback=use_selenium_fallback,
+        selenium_wait_timeout=selenium_wait_timeout,
+    )
+    return left_to_rigth(view_state, dep, session, request_timeout=request_timeout)
 
 
-def run_lima_direction(right: bool = True) -> pd.DataFrame:
-    session, _, view_state = first_session()
+def run_lima_direction(
+    right: bool,
+    request_timeout: int,
+    viewstate_retries: int,
+    use_selenium_fallback: bool,
+    selenium_wait_timeout: int,
+) -> pd.DataFrame:
+    session, _, view_state = first_session(
+        retries=viewstate_retries,
+        request_timeout=request_timeout,
+        use_selenium_fallback=use_selenium_fallback,
+        selenium_wait_timeout=selenium_wait_timeout,
+    )
     if right:
-        return left_to_rigth(view_state, LIMA, session, right=right)
-    return right_to_left(view_state, LIMA, session)
+        return left_to_rigth(view_state, LIMA, session, right=right, request_timeout=request_timeout)
+    return right_to_left(view_state, LIMA, session, request_timeout=request_timeout)
 
 
-def collect_scraper_2_jobs() -> pd.DataFrame:
+def collect_scraper_2_jobs(
+    dep_workers: int = 1,
+    lima_workers: int = 1,
+    request_timeout: int = 30,
+    viewstate_retries: int = 3,
+    use_selenium_fallback: bool = True,
+    selenium_wait_timeout: int = 20,
+) -> pd.DataFrame:
     data_list = []
 
-    with ThreadPoolExecutor(max_workers=3) as executor:
-        futures = {executor.submit(run_department, dep): dep for dep in DEPS}
+    with ThreadPoolExecutor(max_workers=max(1, dep_workers)) as executor:
+        futures = {
+            executor.submit(
+                run_department,
+                dep,
+                request_timeout,
+                viewstate_retries,
+                use_selenium_fallback,
+                selenium_wait_timeout,
+            ): dep
+            for dep in DEPS
+        }
         for future in as_completed(futures):
             dep = futures[future]
             try:
@@ -39,8 +78,18 @@ def collect_scraper_2_jobs() -> pd.DataFrame:
             except Exception as exc:
                 print(f"⚠️ Error en departamento {dep}: {exc}")
 
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        futures = {executor.submit(run_lima_direction, side): side for side in [True, False]}
+    with ThreadPoolExecutor(max_workers=max(1, lima_workers)) as executor:
+        futures = {
+            executor.submit(
+                run_lima_direction,
+                side,
+                request_timeout,
+                viewstate_retries,
+                use_selenium_fallback,
+                selenium_wait_timeout,
+            ): side
+            for side in [True, False]
+        }
         for future in as_completed(futures):
             side = "right" if futures[future] else "left"
             try:
@@ -87,9 +136,32 @@ def persist_scraper_2_outputs(df: pd.DataFrame, started_at: float) -> None:
     print(f"TIEMPO DE EJECUCIÓN: {elapsed:.2f} SEGUNDOS")
 
 
-def run_scraper_2(save_outputs: bool = True) -> pd.DataFrame:
+def run_scraper_2(
+    save_outputs: bool = True,
+    dep_workers: int = 1,
+    lima_workers: int = 1,
+    request_timeout: int = 30,
+    viewstate_retries: int = 3,
+    use_selenium_fallback: bool = True,
+    selenium_wait_timeout: int = 20,
+) -> pd.DataFrame:
     start = time()
-    df = collect_scraper_2_jobs()
+    print(
+        "scraper_2 config:"
+        f" dep_workers={dep_workers},"
+        f" lima_workers={lima_workers},"
+        f" request_timeout={request_timeout},"
+        f" viewstate_retries={viewstate_retries},"
+        f" selenium_fallback={use_selenium_fallback}"
+    )
+    df = collect_scraper_2_jobs(
+        dep_workers=dep_workers,
+        lima_workers=lima_workers,
+        request_timeout=request_timeout,
+        viewstate_retries=viewstate_retries,
+        use_selenium_fallback=use_selenium_fallback,
+        selenium_wait_timeout=selenium_wait_timeout,
+    )
 
     if df.empty:
         print("NO HAY RESULTADOS EN SCRAPER 2.")

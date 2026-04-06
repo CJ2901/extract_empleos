@@ -31,7 +31,15 @@ def run_enabled_scrapers(settings: Settings, save_outputs: bool) -> tuple[list[d
         )
 
     if settings.run_scraper_2:
-        scraper_2_df = run_scraper_2(save_outputs=save_outputs)
+        scraper_2_df = run_scraper_2(
+            save_outputs=save_outputs,
+            dep_workers=settings.scraper_2_dep_workers,
+            lima_workers=settings.scraper_2_lima_workers,
+            request_timeout=settings.scraper_2_request_timeout,
+            viewstate_retries=settings.scraper_2_viewstate_retries,
+            use_selenium_fallback=settings.scraper_2_use_selenium_fallback,
+            selenium_wait_timeout=settings.scraper_2_selenium_wait_timeout,
+        )
         normalized = normalize_scraper_2(scraper_2_df)
         all_records.extend(normalized)
         results.append(

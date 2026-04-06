@@ -34,6 +34,13 @@ def env_bool(name: str, default: bool) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def env_int(name: str, default: int) -> int:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return int(value.strip())
+
+
 @dataclass(frozen=True)
 class Settings:
     supabase_url: str
@@ -42,6 +49,12 @@ class Settings:
     run_scraper_2: bool
     persist_local_outputs: bool
     upsert_chunk_size: int
+    scraper_2_dep_workers: int
+    scraper_2_lima_workers: int
+    scraper_2_request_timeout: int
+    scraper_2_viewstate_retries: int
+    scraper_2_use_selenium_fallback: bool
+    scraper_2_selenium_wait_timeout: int
 
 
 def get_settings() -> Settings:
@@ -61,5 +74,11 @@ def get_settings() -> Settings:
         run_scraper_1=env_bool("RUN_SCRAPER_1", True),
         run_scraper_2=env_bool("RUN_SCRAPER_2", True),
         persist_local_outputs=env_bool("PERSIST_LOCAL_OUTPUTS", False),
-        upsert_chunk_size=int(os.getenv("UPSERT_CHUNK_SIZE", "500")),
+        upsert_chunk_size=env_int("UPSERT_CHUNK_SIZE", 500),
+        scraper_2_dep_workers=env_int("SCRAPER_2_DEP_WORKERS", 1),
+        scraper_2_lima_workers=env_int("SCRAPER_2_LIMA_WORKERS", 1),
+        scraper_2_request_timeout=env_int("SCRAPER_2_REQUEST_TIMEOUT", 30),
+        scraper_2_viewstate_retries=env_int("SCRAPER_2_VIEWSTATE_RETRIES", 3),
+        scraper_2_use_selenium_fallback=env_bool("SCRAPER_2_USE_SELENIUM_FALLBACK", True),
+        scraper_2_selenium_wait_timeout=env_int("SCRAPER_2_SELENIUM_WAIT_TIMEOUT", 20),
     )

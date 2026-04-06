@@ -77,14 +77,32 @@ def get_view_state(soup):
     return view_state_input.get("value")
 
 
+def _request_session(url=URL, head=HEADERS, retries=3, request_timeout=30):
+    session = requests.Session()
+    last_error = None
+    for attempt in range(1, retries + 1):
+        try:
+            response = session.get(url, headers=head, timeout=request_timeout)
+            response.raise_for_status()
+            soup = bsoup(response.content, features="lxml")
+            view_state = get_view_state(soup)
+            return session, soup, view_state
+        except Exception as exc:
+            last_error = exc
+            if attempt < retries:
+                time.sleep(1.5 * attempt)
+    raise RuntimeError(f"No se pudo obtener el ViewState con requests: {last_error}")
 
-def first_session(url=URL, head=HEADERS, retries=3):
+
+def _selenium_session(url=URL, head=HEADERS, request_timeout=30, wait_timeout=20):
     options = Options()
-    options.add_argument("--headless")  # Ejecuta en modo headless
+    options.add_argument("--headless=new")
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-extensions")
+    options.add_argument("--disable-background-networking")
     options.add_argument(f'--user-agent={head.get("User-Agent", "")}')
     options.add_argument("--disable-blink-features=AutomationControlled")
     chrome_binary = os.getenv("CHROME_BIN")
@@ -95,48 +113,70 @@ def first_session(url=URL, head=HEADERS, retries=3):
     service = Service(executable_path=chrome_driver_path)
 
     driver = webdriver.Chrome(service=service, options=options)
-    
+    driver.set_page_load_timeout(max(wait_timeout + 10, request_timeout))
+
     try:
         driver.get(url)
-        wait = WebDriverWait(driver, 30)
+        wait = WebDriverWait(driver, wait_timeout)
         element = wait.until(EC.presence_of_element_located((By.NAME, "javax.faces.ViewState")))
         view_state = element.get_attribute("value")
     except Exception as e:
-        # Imprime un fragmento del HTML para ayudar a depurar
         page_source_snippet = driver.page_source[:1000]
         driver.quit()
         raise Exception(f"Error al obtener el ViewState con Selenium: {e}. Page source snippet: {page_source_snippet}")
-    
-    # Transferir cookies de Selenium a una sesión de requests
+
     session = requests.Session()
     for cookie in driver.get_cookies():
         session.cookies.set(cookie["name"], cookie["value"])
-    
-    # Obtén el HTML renderizado y crea el soup
+
     html = driver.page_source
     soup = bsoup(html, features="lxml")
     driver.quit()
-    
+
     return session, soup, view_state
 
 
-# def first_session(url=URL, head=HEADERS, retries=3):
-#     # INICIAR SESIÓN Y OBTENER VIEWSTATE
-#     session = requests.Session()
-#     for attempt in range(retries):
-#         req = session.get(url, headers=head)
-#         soup = bsoup(req.content, features="lxml")
-#         try:
-#             view_state = get_view_state(soup)
-#             return session, soup, view_state
-#         except ValueError as e:
-#             print(f"Intento {attempt + 1} de {retries} fallido: {e}")
-    raise Exception("No se pudo obtener el ViewState después de varios intentos.")
+def first_session(
+    url=URL,
+    head=HEADERS,
+    retries=3,
+    request_timeout=30,
+    use_selenium_fallback=True,
+    selenium_wait_timeout=20,
+):
+    try:
+        return _request_session(
+            url=url,
+            head=head,
+            retries=retries,
+            request_timeout=request_timeout,
+        )
+    except Exception as request_error:
+        if not use_selenium_fallback:
+            raise RuntimeError(str(request_error)) from request_error
+
+        last_error = request_error
+        for attempt in range(1, retries + 1):
+            try:
+                return _selenium_session(
+                    url=url,
+                    head=head,
+                    request_timeout=request_timeout,
+                    wait_timeout=selenium_wait_timeout,
+                )
+            except Exception as selenium_error:
+                last_error = selenium_error
+                if attempt < retries:
+                    time.sleep(2 * attempt)
+
+        raise RuntimeError(str(last_error)) from last_error
 
 
-def goto_page(data, session):
+def goto_page(data, session, request_timeout=30):
     # PETICIÓN POST CON PAYLOAD
-    return session.post(url=URL, headers=HEADERS, data=data).content
+    response = session.post(url=URL, headers=HEADERS, data=data, timeout=request_timeout)
+    response.raise_for_status()
+    return response.content
 
 def souper(content):
     # CONVERTIR HTML A SOUP
@@ -165,37 +205,37 @@ def data_souper(content):
     data = convert_in_df(soup)
     return data, total
 
-def go_first_page(view_state, dep, session):
+def go_first_page(view_state, dep, session, request_timeout=30):
     # OBTENER PRIMERA PÁGINA
     payload = goto_first_dep_page_payload(view_state, dep)
-    content = goto_page(payload, session)
+    content = goto_page(payload, session, request_timeout=request_timeout)
     data,total_pages = data_souper(content)
     return data,total_pages
 
-def go_next_page(view_state, dep, session):
+def go_next_page(view_state, dep, session, request_timeout=30):
     # OBTENER SIGUIENTE PÁGINA
     payload = goto_next_page_payload(view_state, dep)
-    content = goto_page(payload, session)
+    content = goto_page(payload, session, request_timeout=request_timeout)
     data, _ = data_souper(content)
     return data
 
-def go_last_page(view_state, dep, session):
+def go_last_page(view_state, dep, session, request_timeout=30):
     # OBTENER ÚLTIMA PÁGINA
     payload = goto_last_page_payload(view_state, dep)
-    content = goto_page(payload, session)
+    content = goto_page(payload, session, request_timeout=request_timeout)
     data, _ = data_souper(content)
     return data
 
-def go_prev_page(view_state, dep, session):
+def go_prev_page(view_state, dep, session, request_timeout=30):
     # OBTENER PÁGINA PREVIA
     payload = goto_prev_page_payload(view_state, dep)
-    content = goto_page(payload, session)
+    content = goto_page(payload, session, request_timeout=request_timeout)
     data, _ = data_souper(content)
     return data
 
-def left_to_rigth(view_state, dep, session, right=False):
+def left_to_rigth(view_state, dep, session, right=False, request_timeout=30):
     # SCRAPING IZQUIERDA A DERECHA
-    data, total_pages = go_first_page(view_state, dep, session)
+    data, total_pages = go_first_page(view_state, dep, session, request_timeout=request_timeout)
     data_list = [data]
 
     if not total_pages or total_pages <= 1:
@@ -205,16 +245,16 @@ def left_to_rigth(view_state, dep, session, right=False):
         try:
             # Simula lectura humana
             time.sleep(random.uniform(1.5, 3.0))
-            data = go_next_page(view_state, dep, session)
+            data = go_next_page(view_state, dep, session, request_timeout=request_timeout)
             data_list.append(data)
         except Exception:
             break
     return pd.concat(data_list, ignore_index=True)
 
-def right_to_left(view_state, dep, session, left=True):
+def right_to_left(view_state, dep, session, left=True, request_timeout=30):
     # SCRAPING DERECHA A IZQUIERDA
-    _, total_pages = go_first_page(view_state, dep, session)
-    data = go_last_page(view_state, dep, session)
+    _, total_pages = go_first_page(view_state, dep, session, request_timeout=request_timeout)
+    data = go_last_page(view_state, dep, session, request_timeout=request_timeout)
     data_list = [data]
 
     if not total_pages or total_pages <= 1:
@@ -223,7 +263,8 @@ def right_to_left(view_state, dep, session, left=True):
     # for _ in tqdm(range(limite - 1)):
     for _ in tqdm(range(total_pages - 1), desc=f"Scraping Inverso Dep {dep}"):
         try:
-            data = go_prev_page(view_state, dep, session)
+            time.sleep(random.uniform(1.5, 3.0))
+            data = go_prev_page(view_state, dep, session, request_timeout=request_timeout)
             data_list.append(data)
         except Exception:
             break
