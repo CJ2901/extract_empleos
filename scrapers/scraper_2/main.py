@@ -8,7 +8,7 @@ import pandas as pd
 import pytz
 
 from app.paths import DATA_S2_DIR, LOGS_S2_FILE
-from scrapers.scraper_2.utils import first_session, left_to_rigth, right_to_left
+from scrapers.scraper_2.utils import clone_session, first_session, left_to_rigth, right_to_left
 
 GMT5 = pytz.timezone("Etc/GMT+5")
 DEPS = [str(n).zfill(2) for n in range(1, 26) if n != 15]
@@ -17,57 +17,74 @@ LIMA = "15"
 
 def run_department(
     dep: str,
-    request_timeout: int,
-    viewstate_retries: int,
-    use_selenium_fallback: bool,
-    selenium_wait_timeout: int,
+    view_state: str,
+    base_session,
+    connect_timeout: int,
+    read_timeout: int,
 ) -> pd.DataFrame:
-    session, _, view_state = first_session(
-        retries=viewstate_retries,
-        request_timeout=request_timeout,
-        use_selenium_fallback=use_selenium_fallback,
-        selenium_wait_timeout=selenium_wait_timeout,
+    session = clone_session(base_session)
+    return left_to_rigth(
+        view_state,
+        dep,
+        session,
+        connect_timeout=connect_timeout,
+        read_timeout=read_timeout,
     )
-    return left_to_rigth(view_state, dep, session, request_timeout=request_timeout)
 
 
 def run_lima_direction(
     right: bool,
-    request_timeout: int,
-    viewstate_retries: int,
-    use_selenium_fallback: bool,
-    selenium_wait_timeout: int,
+    view_state: str,
+    base_session,
+    connect_timeout: int,
+    read_timeout: int,
 ) -> pd.DataFrame:
-    session, _, view_state = first_session(
-        retries=viewstate_retries,
-        request_timeout=request_timeout,
-        use_selenium_fallback=use_selenium_fallback,
-        selenium_wait_timeout=selenium_wait_timeout,
-    )
+    session = clone_session(base_session)
     if right:
-        return left_to_rigth(view_state, LIMA, session, right=right, request_timeout=request_timeout)
-    return right_to_left(view_state, LIMA, session, request_timeout=request_timeout)
+        return left_to_rigth(
+            view_state,
+            LIMA,
+            session,
+            right=right,
+            connect_timeout=connect_timeout,
+            read_timeout=read_timeout,
+        )
+    return right_to_left(
+        view_state,
+        LIMA,
+        session,
+        connect_timeout=connect_timeout,
+        read_timeout=read_timeout,
+    )
 
 
 def collect_scraper_2_jobs(
     dep_workers: int = 1,
     lima_workers: int = 1,
-    request_timeout: int = 30,
+    connect_timeout: int = 60,
+    read_timeout: int = 60,
     viewstate_retries: int = 3,
     use_selenium_fallback: bool = True,
     selenium_wait_timeout: int = 20,
 ) -> pd.DataFrame:
     data_list = []
+    base_session, _, view_state = first_session(
+        retries=viewstate_retries,
+        connect_timeout=connect_timeout,
+        read_timeout=read_timeout,
+        use_selenium_fallback=use_selenium_fallback,
+        selenium_wait_timeout=selenium_wait_timeout,
+    )
 
     with ThreadPoolExecutor(max_workers=max(1, dep_workers)) as executor:
         futures = {
             executor.submit(
                 run_department,
                 dep,
-                request_timeout,
-                viewstate_retries,
-                use_selenium_fallback,
-                selenium_wait_timeout,
+                view_state,
+                base_session,
+                connect_timeout,
+                read_timeout,
             ): dep
             for dep in DEPS
         }
@@ -83,10 +100,10 @@ def collect_scraper_2_jobs(
             executor.submit(
                 run_lima_direction,
                 side,
-                request_timeout,
-                viewstate_retries,
-                use_selenium_fallback,
-                selenium_wait_timeout,
+                view_state,
+                base_session,
+                connect_timeout,
+                read_timeout,
             ): side
             for side in [True, False]
         }
@@ -140,7 +157,8 @@ def run_scraper_2(
     save_outputs: bool = True,
     dep_workers: int = 1,
     lima_workers: int = 1,
-    request_timeout: int = 30,
+    connect_timeout: int = 60,
+    read_timeout: int = 60,
     viewstate_retries: int = 3,
     use_selenium_fallback: bool = True,
     selenium_wait_timeout: int = 20,
@@ -150,14 +168,16 @@ def run_scraper_2(
         "scraper_2 config:"
         f" dep_workers={dep_workers},"
         f" lima_workers={lima_workers},"
-        f" request_timeout={request_timeout},"
+        f" connect_timeout={connect_timeout},"
+        f" read_timeout={read_timeout},"
         f" viewstate_retries={viewstate_retries},"
         f" selenium_fallback={use_selenium_fallback}"
     )
     df = collect_scraper_2_jobs(
         dep_workers=dep_workers,
         lima_workers=lima_workers,
-        request_timeout=request_timeout,
+        connect_timeout=connect_timeout,
+        read_timeout=read_timeout,
         viewstate_retries=viewstate_retries,
         use_selenium_fallback=use_selenium_fallback,
         selenium_wait_timeout=selenium_wait_timeout,

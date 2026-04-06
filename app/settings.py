@@ -51,7 +51,8 @@ class Settings:
     upsert_chunk_size: int
     scraper_2_dep_workers: int
     scraper_2_lima_workers: int
-    scraper_2_request_timeout: int
+    scraper_2_connect_timeout: int
+    scraper_2_read_timeout: int
     scraper_2_viewstate_retries: int
     scraper_2_use_selenium_fallback: bool
     scraper_2_selenium_wait_timeout: int
@@ -77,7 +78,8 @@ def get_settings() -> Settings:
         upsert_chunk_size=env_int("UPSERT_CHUNK_SIZE", 500),
         scraper_2_dep_workers=env_int("SCRAPER_2_DEP_WORKERS", 1),
         scraper_2_lima_workers=env_int("SCRAPER_2_LIMA_WORKERS", 1),
-        scraper_2_request_timeout=env_int("SCRAPER_2_REQUEST_TIMEOUT", 30),
+        scraper_2_connect_timeout=env_int("SCRAPER_2_CONNECT_TIMEOUT", 60),
+        scraper_2_read_timeout=env_int("SCRAPER_2_READ_TIMEOUT", 60),
         scraper_2_viewstate_retries=env_int("SCRAPER_2_VIEWSTATE_RETRIES", 3),
         scraper_2_use_selenium_fallback=env_bool("SCRAPER_2_USE_SELENIUM_FALLBACK", False),
         scraper_2_selenium_wait_timeout=env_int("SCRAPER_2_SELENIUM_WAIT_TIMEOUT", 20),
