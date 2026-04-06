@@ -1,69 +1,105 @@
 # SCRIPT PRINCIPAL
+import datetime
+import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from utils import first_session, left_to_rigth, right_to_left
 from time import time
+
 import pandas as pd
-import pytz, datetime, uuid
-import os
+import pytz
+
+from app.paths import DATA_S2_DIR, LOGS_S2_FILE
+from scrapers.scraper_2.utils import first_session, left_to_rigth, right_to_left
 
 GMT5 = pytz.timezone("Etc/GMT+5")
-today = datetime.datetime.now(GMT5).strftime("%d-%m-%Y")
-
 DEPS = [str(n).zfill(2) for n in range(1, 26) if n != 15]
 LIMA = "15"
 
-PATH_LOG = f"scrapers/scraper_2/logs/logs.csv"
-DATA_PATH = f"data/scraper_2/{today}.csv"
 
-def ejecutar(dep):
-    # SCRAPING POR DEPARTAMENTO
+def run_department(dep: str) -> pd.DataFrame:
     session, _, view_state = first_session()
     return left_to_rigth(view_state, dep, session)
 
-def both_sides(right=True):
-    # SCRAPING PARA LIMA EN AMBAS DIRECCIONES
+
+def run_lima_direction(right: bool = True) -> pd.DataFrame:
     session, _, view_state = first_session()
     if right:
         return left_to_rigth(view_state, LIMA, session, right=right)
-    else:
-        return right_to_left(view_state, LIMA, session)
+    return right_to_left(view_state, LIMA, session)
 
-if __name__ == "__main__":
-    start = time()
+
+def collect_scraper_2_jobs() -> pd.DataFrame:
     data_list = []
 
-    # EJECUCIÓN EN PARALELO POR DEPARTAMENTO
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        futures = {executor.submit(ejecutar, dep): dep for dep in DEPS}
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        futures = {executor.submit(run_department, dep): dep for dep in DEPS}
         for future in as_completed(futures):
-            data_list.append(future.result())
+            dep = futures[future]
+            try:
+                data_list.append(future.result())
+            except Exception as exc:
+                print(f"⚠️ Error en departamento {dep}: {exc}")
 
-    # EJECUCIÓN PARA LIMA EN AMBAS DIRECCIONES
     with ThreadPoolExecutor(max_workers=2) as executor:
-        futures = {executor.submit(both_sides, side): side for side in [True, False]}
+        futures = {executor.submit(run_lima_direction, side): side for side in [True, False]}
         for future in as_completed(futures):
-            data_list.append(future.result())
+            side = "right" if futures[future] else "left"
+            try:
+                data_list.append(future.result())
+            except Exception as exc:
+                print(f"⚠️ Error en Lima ({side}): {exc}")
 
-    # UNIR RESULTADOS Y GUARDAR CSV
-    data = pd.concat(data_list, ignore_index=True)
-    data["id_uuid"] = [uuid.uuid4() for _ in range(len(data))]
-    data["fechaActualizacion"] = datetime.datetime.now()
-    os.makedirs(os.path.dirname(DATA_PATH), exist_ok=True)
-    data.to_csv(DATA_PATH, index=False)
-    print(f"DATOS GUARDADOS EN '{DATA_PATH}' ({len(data)} REGISTROS).")
+    if not data_list:
+        return pd.DataFrame(columns=["posicion", "empresa", "ubicacion", "num_conv", "n_vac", "salario", "fecha_inicio", "fecha_fin"])
 
-    # ACTUALIZAR LOGS
-    last_log = pd.read_csv(PATH_LOG)
-    end = time() - start
-    data_log = {
+    return pd.concat(data_list, ignore_index=True)
+
+
+def persist_scraper_2_outputs(df: pd.DataFrame, started_at: float) -> None:
+    today = datetime.datetime.now(GMT5).strftime("%d-%m-%Y")
+    path_log = LOGS_S2_FILE
+    data_path = DATA_S2_DIR / f"{today}.csv"
+
+    export_df = df.copy()
+    export_df["id_uuid"] = [uuid.uuid4() for _ in range(len(export_df))]
+    export_df["fechaActualizacion"] = datetime.datetime.now()
+
+    data_path.parent.mkdir(parents=True, exist_ok=True)
+    export_df.to_csv(data_path, index=False)
+    print(f"DATOS GUARDADOS EN '{data_path}' ({len(export_df)} REGISTROS).")
+
+    try:
+        last_log = pd.read_csv(path_log)
+    except FileNotFoundError:
+        last_log = pd.DataFrame()
+
+    elapsed = time() - started_at
+    log_row = {
         "dep": ["all"],
         "last_date": today,
-        "path_data": [DATA_PATH],
-        "n_jobs": [len(data) - 10],
-        "time": [end],
+        "path_data": [data_path],
+        "n_jobs": [len(export_df)],
+        "time": [elapsed],
     }
-    day_data = pd.concat([last_log, pd.DataFrame(data_log)], ignore_index=True)
-    day_data["id_uuid"] = [uuid.uuid4() for _ in range(len(day_data))]
-    os.makedirs(os.path.dirname(PATH_LOG), exist_ok=True)
-    day_data.to_csv(PATH_LOG, index=False)
-    print(f"TIEMPO DE EJECUCIÓN: {end:.2f} SEGUNDOS")
+    log_df = pd.concat([last_log, pd.DataFrame(log_row)], ignore_index=True)
+    log_df["id_uuid"] = [uuid.uuid4() for _ in range(len(log_df))]
+    path_log.parent.mkdir(parents=True, exist_ok=True)
+    log_df.to_csv(path_log, index=False)
+    print(f"TIEMPO DE EJECUCIÓN: {elapsed:.2f} SEGUNDOS")
+
+
+def run_scraper_2(save_outputs: bool = True) -> pd.DataFrame:
+    start = time()
+    df = collect_scraper_2_jobs()
+
+    if df.empty:
+        print("NO HAY RESULTADOS EN SCRAPER 2.")
+        return df
+
+    if save_outputs:
+        persist_scraper_2_outputs(df, start)
+
+    return df
+
+
+if __name__ == "__main__":
+    run_scraper_2(save_outputs=True)

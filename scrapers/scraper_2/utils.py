@@ -1,14 +1,18 @@
 # FUNCIONES DE SCRAPING Y AUXILIARES
+import os
 import re
+import time
+import random
 import requests
 import pandas as pd
 from bs4 import BeautifulSoup as bsoup
 import warnings
 from bs4 import XMLParsedAsHTMLWarning
 from tqdm import tqdm
-from config import URL, HEADERS, share_payload, first_page, next_page, last_page, prev_page
+from scrapers.scraper_2.config import URL, HEADERS, share_payload, first_page, next_page, last_page, prev_page
 
 from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -79,10 +83,18 @@ def first_session(url=URL, head=HEADERS, retries=3):
     options.add_argument("--headless")  # Ejecuta en modo headless
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
     options.add_argument(f'--user-agent={head.get("User-Agent", "")}')
     options.add_argument("--disable-blink-features=AutomationControlled")
-    
-    driver = webdriver.Chrome(options=options)
+    chrome_binary = os.getenv("CHROME_BIN")
+    if chrome_binary:
+        options.binary_location = chrome_binary
+
+    chrome_driver_path = os.getenv("CHROMEDRIVER_BIN", "/usr/bin/chromedriver")
+    service = Service(executable_path=chrome_driver_path)
+
+    driver = webdriver.Chrome(service=service, options=options)
     
     try:
         driver.get(url)
@@ -157,8 +169,8 @@ def go_first_page(view_state, dep, session):
     # OBTENER PRIMERA PÁGINA
     payload = goto_first_dep_page_payload(view_state, dep)
     content = goto_page(payload, session)
-    data, _ = data_souper(content)
-    return data
+    data,total_pages = data_souper(content)
+    return data,total_pages
 
 def go_next_page(view_state, dep, session):
     # OBTENER SIGUIENTE PÁGINA
@@ -183,15 +195,16 @@ def go_prev_page(view_state, dep, session):
 
 def left_to_rigth(view_state, dep, session, right=False):
     # SCRAPING IZQUIERDA A DERECHA
-    data = go_first_page(view_state, dep, session)
+    data, total_pages = go_first_page(view_state, dep, session)
     data_list = [data]
-    if right:
-        # SI ES SCRAPING A DERECHA, LÍMITE FIJO (EJEMPLO)
-        limite = 5
-    else:
-        limite = 5
-    for _ in tqdm(range(limite - 1)):
+
+    if not total_pages or total_pages <= 1:
+            return pd.concat(data_list, ignore_index=True)    
+    
+    for _ in tqdm(range(total_pages - 1), desc=f"Scraping Dep {dep}"):
         try:
+            # Simula lectura humana
+            time.sleep(random.uniform(1.5, 3.0))
             data = go_next_page(view_state, dep, session)
             data_list.append(data)
         except Exception:
@@ -200,14 +213,19 @@ def left_to_rigth(view_state, dep, session, right=False):
 
 def right_to_left(view_state, dep, session, left=True):
     # SCRAPING DERECHA A IZQUIERDA
-    data = go_first_page(view_state, dep, session)
+    _, total_pages = go_first_page(view_state, dep, session)
     data = go_last_page(view_state, dep, session)
     data_list = [data]
-    limite = 5
-    for _ in tqdm(range(limite - 1)):
+
+    if not total_pages or total_pages <= 1:
+        return pd.concat(data_list, ignore_index=True)
+
+    # for _ in tqdm(range(limite - 1)):
+    for _ in tqdm(range(total_pages - 1), desc=f"Scraping Inverso Dep {dep}"):
         try:
             data = go_prev_page(view_state, dep, session)
             data_list.append(data)
         except Exception:
             break
+
     return pd.concat(data_list, ignore_index=True)

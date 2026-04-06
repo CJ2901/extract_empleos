@@ -1,0 +1,12 @@
+beautifulsoup4>=4.12,<5.0
+fastapi>=0.115,<1.0
+lxml>=4.9,<6.0
+pandas>=2.2,<3.0
+psycopg2-binary>=2.9,<3.0
+pytz>=2024.1,<2026.0
+requests>=2.31,<3.0
+selenium>=4.21,<5.0
+sqlalchemy>=2.0,<3.0
+supabase>=2.4,<3.0
+tqdm>=4.66,<5.0
+uvicorn>=0.30,<1.0

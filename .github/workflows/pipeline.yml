@@ -1,46 +1,39 @@
-name: Scrape & Update Data
+name: Scrape Jobs To Supabase
 
 on:
-  # SE EJECUTA TODOS LOS DÍAS A LAS 08:34 HORA DE LIMA (UTC-5)
-  # => 13:34 UTC
   schedule:
-    # - cron: '34 13 * * *'
-    - cron: '7 1 * * *'
+    # 08:00 y 20:00 hora de Lima (UTC-5)
+    - cron: "0 13 * * *"
+    - cron: "0 1 * * *"
   workflow_dispatch:
 
 jobs:
-  run-scrapers:
-    runs-on: windows-latest
+  scrape-and-upsert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v3
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          persist-credentials: false
+        uses: actions/checkout@v4
 
-      - name: Add config folder to PATH
-        run: echo "${{ github.workspace }}\config" >> $GITHUB_PATH
+      - name: Build scraper image
+        run: docker build -f Dockerfile.scraper -t extract-empleos:ci .
 
-      - name: Setup Python (Scraper 1)
-        uses: actions/setup-python@v3
-        with:
-          python-version: '3.10'
-
-      - name: Install dependencies for Scraper 1
-        run: pip install -r scrapers/scraper_1/requirements.txt
-
-      - name: Run Scraper 1
-        run: python scrapers/scraper_1/main.py
-
-      - name: Commit changes for Scraper 1
+      - name: Run scraper container
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          RUN_SCRAPER_1: "false"
+          RUN_SCRAPER_2: "true"
+          PERSIST_LOCAL_OUTPUTS: "false"
+          UPSERT_CHUNK_SIZE: "500"
         run: |
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          git add .
-          git commit -m "Scrapeo del dia (Scraper 1): $(date)" || echo "No changes to commit"
-
-      - name: Push changes after Scraper 1
-        uses: ad-m/github-push-action@v0.6.0
-        with:
-          github_token: ${{ secrets.PERSONAL_TOKEN }}
-          branch: main
+          docker run --rm \
+            -e SUPABASE_URL \
+            -e SUPABASE_SERVICE_ROLE_KEY \
+            -e RUN_SCRAPER_1 \
+            -e RUN_SCRAPER_2 \
+            -e PERSIST_LOCAL_OUTPUTS \
+            -e UPSERT_CHUNK_SIZE \
+            extract-empleos:ci \
+            /app/run_scrapers.sh

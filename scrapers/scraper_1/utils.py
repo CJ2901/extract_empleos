@@ -1,6 +1,6 @@
 # FUNCIONES AUXILIARES DE SCRAPING
 import requests
-from config import BASE_URL, HEADERS, DATA_BODY, PAGE_SIZE
+from scrapers.scraper_1.config import BASE_URL, HEADERS, DATA_BODY, PAGE_SIZE
 
 def get_total_and_first_page():
     # OBTIENE TOTAL, PÁGINAS Y PRIMERA PÁGINA
